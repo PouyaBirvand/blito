@@ -1,0 +1,1590 @@
+میخوام این رو داخل مپ بهم نشون بدی!
+یعنی جای میز ها و... رو داخل مپی که صندلی ها و استیج و اینها که همونجایی که خودمونم میتونیم بسازیمشون هم قرار بدی
+یعنی دو حالت داره
+یا خودمون میتونیم بسازیم ارسال کنیم
+یا وجود داره و همچنان باز هم میتونیم طبقه های دیگه بسازیم یا..
+
+import React from 'react';
+import {useSeatMapStore, type Seat} from '@/stores/seatMapStore';
+import {Skeleton} from '@/components/ui/skeleton';
+
+
+interface SeatElementProps {
+    seat: Seat;
+    editable: boolean;
+    onMouseDown: (e: React.MouseEvent, id: string) => void;
+    onRemove: (id: string) => void;
+    isLoading?: boolean;
+}
+
+
+export const SeatElement: React.FC<SeatElementProps> = ({seat, editable, onMouseDown, onRemove, isLoading = false}) => {
+    const {seatMap} = useSeatMapStore();
+    const seatSize = 20;
+    let bgColor = '';
+
+
+    // Find the section this seat belongs to
+    const seatSection = seatMap.sections.find(section => section.id === seat.sectionId);
+
+
+    // Set background color based on seat type and status
+    if (seat.type === 'vip') {
+        bgColor = '#D946EF'; // Vibrant pink for VIP seats
+    } else if (seat.type === 'disabled') {
+        bgColor = '#33C3F0'; // Blue for disabled access seats
+    } else if (seatSection) {
+        // Use section color if available
+        bgColor = seatSection.color;
+    } else {
+        // Regular seats get color based on status
+        switch (seat.status) {
+            case 'available':
+                bgColor = '#9b87f5';
+                break;
+            case 'selected':
+                bgColor = '#8B5CF6';
+                break;
+            case 'sold':
+                bgColor = '#F97316';
+                break;
+            case 'disabled':
+                bgColor = '#8E9196';
+                break;
+            default:
+                bgColor = '#9b87f5';
+        }
+    }
+
+
+    // Add different shape for disabled access seats
+    const borderRadius = seat.type === 'disabled' ? '50%' : '0.375rem';
+
+
+    // Different styles for VIP seats (diamond shape)
+    const transform = seat.type === 'vip' ? 'rotate(45deg)' : 'none';
+
+
+    if (isLoading) {
+        return (
+            <div className="absolute flex flex-col items-center" style={{
+                left: seat.x + 'px',
+                top: seat.y + 'px',
+            }}>
+                <Skeleton className="h-3 w-8 mb-0.5"/>
+                <Skeleton className="h-5 w-5"/>
+            </div>
+        );
+    }
+
+
+    return (
+        <div className="absolute flex flex-col items-center" style={{
+            left: seat.x + 'px',
+            top: seat.y + 'px',
+        }}>
+            {/* Row label above seat */}
+            <div className="text-xs font-medium mb-0.5 text-gray-600">{seat.row}</div>
+
+
+            <div
+                className={`flex items-center justify-center text-white text-xs font-bold select-none ${editable ? 'cursor-move group' : ''}`}
+                style={{
+                    width: seatSize + 'px',
+                    height: seatSize + 'px',
+                    backgroundColor: bgColor,
+                    borderRadius: borderRadius,
+                    transform: transform,
+                    position: 'relative',
+                }}
+                onMouseDown={(e) => editable && onMouseDown(e, seat.id)}
+                title={`${seat.row}${seat.number} (${seat.type})${seatSection ? ' in ' + seatSection.name : ''}`}
+            >
+                <span style={{transform: seat.type === 'vip' ? 'rotate(-45deg)' : 'none'}}>
+                  {seat.number}
+                </span>
+
+
+                {editable && (
+                    <button
+                        className="absolute -top-2 -right-2 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 text-xs"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onRemove(seat.id);
+                        }}
+                        style={{transform: seat.type === 'vip' ? 'rotate(-45deg)' : 'none'}}
+                    >
+                        ×
+                    </button>
+                )}
+            </div>
+        </div>
+        // <div
+        //     className={`absolute flex items-center justify-center text-white text-xs font-bold select-none ${editable ? 'cursor-move group' : ''}`}
+        //     style={{
+        //         left: seat.x + 'px',
+        //         top: seat.y + 'px',
+        //         width: seatSize + 'px',
+        //         height: seatSize + 'px',
+        //         backgroundColor: bgColor,
+        //         borderRadius: borderRadius,
+        //     }}
+        //     onMouseDown={(e) => editable && onMouseDown(e, seat.id)}
+        //     title={`${seat.row}${seat.number} (${seat.type})`}
+        // >
+        //     {seat.number}
+        //
+        //     {editable && (
+        //         <button
+        //             className="absolute -top-2 -right-2 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 text-xs"
+        //             onClick={(e) => {
+        //                 e.stopPropagation();
+        //                 onRemove(seat.id);
+        //             }}
+        //         >
+        //             ×
+        //         </button>
+        //     )}
+        // </div>
+    );
+};import React from 'react';
+import type {Section} from '@/stores/seatMapStore';
+
+
+interface SectionElementProps {
+    section: Section;
+    editable: boolean;
+    onMouseDown: (e: React.MouseEvent, id: string) => void;
+    onResizerMouseDown: (e: React.MouseEvent, id: string, width: number, height: number) => void;
+    onRemove: (id: string) => void;
+}
+
+
+export const SectionElement: React.FC<SectionElementProps> = ({
+                                                                  section,
+                                                                  editable,
+                                                                  onMouseDown,
+                                                                  onResizerMouseDown,
+                                                                  onRemove
+                                                              }) => {
+    return (
+        <div
+            className={`absolute rounded-md border-2 flex items-center justify-center ${editable ? 'cursor-move' : ''}`}
+            style={{
+                left: section.x + 'px',
+                top: section.y + 'px',
+                width: section.width + 'px',
+                height: section.height + 'px',
+                backgroundColor: section.color,
+                borderColor: '#9b87f5',
+            }}
+            onMouseDown={(e) => editable && onMouseDown(e, section.id)}
+        >
+      <span className="text-sm font-medium select-none pointer-events-none">
+        {section.name}
+      </span>
+
+
+            {editable && (
+                <>
+                    <button
+                        className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-red-500 text-white rounded-full"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onRemove(section.id);
+                        }}
+                    >
+                        ×
+                    </button>
+
+
+                    <div
+                        className="absolute bottom-0 right-0 w-4 h-4 bg-white border border-gray-400 rounded-bl-md cursor-se-resize"
+                        onMouseDown={(e) => onResizerMouseDown(e, section.id, section.width, section.height)}
+                    />
+                </>
+            )}
+        </div>
+    );
+};    import React, {useState} from 'react';
+    import {useSeatMapStore} from '@/stores/seatMapStore';
+
+
+    interface StageElementProps {
+        editable: boolean;
+        onMouseDown?: (e: React.MouseEvent, id: string) => void;
+        onResizerMouseDown?: (e: React.MouseEvent, id: string, width: number, height: number) => void;
+    }
+
+
+    export const StageElement: React.FC<StageElementProps> = ({
+                                                                editable,
+                                                                onMouseDown,
+                                                                onResizerMouseDown
+                                                            }) => {
+        const {seatMap, updateStage} = useSeatMapStore();
+        const {stage} = seatMap;
+        const [isEditing, setIsEditing] = useState(false);
+        const [stageName, setStageName] = useState(stage.name || 'STAGE');
+
+
+        const handleNameClick = (e: React.MouseEvent) => {
+            if (!editable) return;
+            e.stopPropagation();
+            setIsEditing(true);
+        };
+
+
+        const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+            setStageName(e.target.value);
+        };
+
+
+        const handleNameBlur = () => {
+            updateStage({name: stageName});
+            setIsEditing(false);
+        };
+
+
+        const handleKeyDown = (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter') {
+                handleNameBlur();
+            }
+        };
+
+
+        return (
+            <div
+                className="absolute top-[100px] left-[1200px] w-[600px] h-[80px] bg-gray-300 rounded-md flex items-center justify-center"
+                style={{
+                    left: `${stage.x}px`,
+                    top: `${stage.y}px`,
+                    width: `${stage.width}px`,
+                    height: `${stage.height}px`
+                }}
+                onMouseDown={editable && onMouseDown ? (e) => onMouseDown(e, "stage") : undefined}
+            >
+                {isEditing ? (
+                    <input
+                        type="text"
+                        value={stageName}
+                        onChange={handleNameChange}
+                        onBlur={handleNameBlur}
+                        onKeyDown={handleKeyDown}
+                        className="bg-transparent text-white font-bold text-center focus:outline-none"
+                        autoFocus
+                    />
+                ) : (
+                    <span className="text-white font-bold select-none" onClick={handleNameClick}>
+                        {stage.name || 'STAGE'}
+                    </span>
+                )}
+
+
+                {editable && onResizerMouseDown && (
+                    <div
+                        className="absolute bottom-0 right-0 w-4 h-4 bg-white border border-gray-400 cursor-se-resize"
+                        onMouseDown={(e) => {
+                            e.stopPropagation();
+                            onResizerMouseDown(e, "stage", stage.width, stage.height);
+                        }}
+                    />
+                )}
+            </div>
+        );
+    };import { Button } from '@/components/ui/button';
+import { Move, Plus, Grid3x3 } from 'lucide-react';
+
+
+interface ToolSelectorProps {
+    selectedTool: string | null;
+    onToolSelect: (tool: string | null) => void;
+    showHelp: boolean;
+    setShowHelp: boolean;
+}
+
+
+export const ToolSelector: React.FC<ToolSelectorProps> = ({ selectedTool, onToolSelect, showHelp, setShowHelp }) => {
+    return (
+        <div className="absolute top-2 flex space-x-2 z-10 bg-white rounded-md shadow p-2">
+            <Button
+                size="sm"
+                variant={selectedTool === 'seat' ? 'default' : 'outline'}
+                className={selectedTool === 'seat' ? 'bg-primary' : ''}
+                onClick={() => onToolSelect(selectedTool === 'seat' ? null : 'seat')}
+            >
+                <Plus className="h-4 w-4 mr-1" />
+                صندلی <span className="ml-1 text-xs opacity-70">(S)</span>
+            </Button>
+            <Button
+                size="sm"
+                variant={selectedTool === 'section' ? 'default' : 'outline'}
+                className={selectedTool === 'section' ? 'bg-primary' : ''}
+                onClick={() => onToolSelect(selectedTool === 'section' ? null : 'section')}
+            >
+                <Grid3x3 className="h-4 w-4 mr-1" />
+                بخش <span className="ml-1 text-xs opacity-70">(C)</span>
+            </Button>
+            <Button
+                size="sm"
+                variant={selectedTool === 'stage' ? 'default' : 'outline'}
+                className={selectedTool === 'stage' ? 'bg-primary' : ''}
+                onClick={() => onToolSelect(selectedTool === 'stage' ? null : 'stage')}
+            >
+                Stage <span className="ml-1 text-xs opacity-70">(T)</span>
+            </Button>
+            <Button
+                size="sm"
+                variant={selectedTool === 'move' ? 'default' : 'outline'}
+                onClick={() => onToolSelect(selectedTool === 'move' ? null : 'move')}
+            >
+                <Move className="h-4 w-4 mr-1" />
+                Move <span className="ml-1 text-xs opacity-70">(M)</span>
+            </Button>
+
+
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowHelp(prev => !prev)}
+                className="bg-white/80 backdrop-blur-sm"
+            >
+                <p>
+                    {showHelp ? "Hide Help" : "Show Help"}
+                    <span className="ml-1 text-xs opacity-70">(H)</span>
+                </p>
+            </Button>
+
+
+        </div>
+    );
+};import React from 'react';
+import { Button } from '@/components/ui/button';
+
+
+interface ZoomControlsProps {
+    onZoomIn: () => void;
+    onZoomOut: () => void;
+    onReset: () => void;
+}
+
+
+export const ZoomControls: React.FC<ZoomControlsProps> = ({ onZoomIn, onZoomOut, onReset }) => {
+    return (
+        <div className="absolute bottom-24 md:bottom-5 left-4 flex space-x-2 z-10 bg-white rounded-md shadow p-2">
+            <Button size="sm" variant="outline" onClick={onZoomIn}>+</Button>
+            <Button size="sm" variant="outline" onClick={onReset}>بازنشانی</Button>
+            <Button size="sm" variant="outline" onClick={onZoomOut}>-</Button>
+        </div>
+    );
+};import React, {useState} from 'react';
+import {Button} from '@/components/ui/button';
+import {useSeatMapStore, type Floor} from '@/stores/seatMapStore';
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter} from '@/components/ui/dialog';
+import {Input} from '@/components/ui/input';
+import {Label} from '@/components/ui/label';
+import {toast} from 'sonner';
+
+
+export const FloorSelector: React.FC = () => {
+    const {seatMap, addFloor, setActiveFloor, updateFloor, removeFloor} = useSeatMapStore();
+    const [isAddingFloor, setIsAddingFloor] = useState(false);
+    const [isEditingFloor, setIsEditingFloor] = useState(false);
+    const [newFloorName, setNewFloorName] = useState('');
+    const [newFloorLevel, setNewFloorLevel] = useState(1);
+    const [selectedFloor, setSelectedFloor] = useState<Floor | null>(null);
+
+
+    const handleAddFloor = () => {
+        if (!newFloorName.trim()) {
+            toast.error("Floor name cannot be empty");
+            return;
+        }
+
+
+        const newFloor = {
+            id: `floor-${Date.now()}`,
+            name: newFloorName,
+            level: newFloorLevel
+        };
+
+
+        addFloor(newFloor);
+        setActiveFloor(newFloor.id);
+        setIsAddingFloor(false);
+        setNewFloorName('');
+        setNewFloorLevel(seatMap.floors.length + 1);
+
+
+        toast(`Floor "${newFloorName}" added`);
+    };
+
+
+    const handleEditFloor = () => {
+        if (!selectedFloor) return;
+        if (!newFloorName.trim()) {
+            toast.error("Floor name cannot be empty");
+            return;
+        }
+
+
+        updateFloor(selectedFloor.id, {
+            name: newFloorName,
+            level: newFloorLevel
+        });
+
+
+        setIsEditingFloor(false);
+        setSelectedFloor(null);
+        toast(`Floor updated`);
+    };
+
+
+    const handleDeleteFloor = (floor: Floor) => {
+        if (seatMap.floors.length <= 1) {
+            toast.error("Cannot delete the only floor");
+            return;
+        }
+
+
+        if (confirm(`Are you sure you want to delete the floor "${floor.name}"? All elements on this floor will be deleted.`)) {
+            removeFloor(floor.id);
+            toast(`Floor "${floor.name}" deleted`);
+        }
+    };
+
+
+    const startEditFloor = (floor: Floor) => {
+        setSelectedFloor(floor);
+        setNewFloorName(floor.name);
+        setNewFloorLevel(floor.level);
+        setIsEditingFloor(true);
+    };
+
+
+    const getActiveFloor = () => {
+        return seatMap.floors.find(floor => floor.id === seatMap.activeFloorId) || seatMap.floors[0];
+    };
+
+
+    return (
+        <>
+            <DropdownMenu dir="rtl">
+                <DropdownMenuTrigger asChild>
+                    <Button dir="rtl" variant="outline" className="bg-white/90 text-black">
+                        طبقه: {getActiveFloor()?.name || 'همکف'}
+                        <span className="mr-1 opacity-70">▼</span>
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48">
+                    {seatMap.floors.map((floor) => (
+                        <DropdownMenuItem
+                            key={floor.id}
+                            className={floor.id === seatMap.activeFloorId ? 'bg-blue-50 font-medium' : ''}
+                            onClick={() => setActiveFloor(floor.id)}
+                        >
+                            {floor.name}
+                            <span className="mr-auto opacity-60 text-xs">طبقه {floor.level}</span>
+                        </DropdownMenuItem>
+                    ))}
+
+
+                    <DropdownMenuSeparator/>
+
+
+                    <DropdownMenuItem onSelect={(e) => {
+                        e.preventDefault();
+                        setIsAddingFloor(true);
+                        setNewFloorLevel(seatMap.floors.length + 1);
+                    }}>
+                        افزودن طبقه جدید...
+                    </DropdownMenuItem>
+
+
+                    {seatMap.floors.length > 1 && (
+                        <>
+                            <DropdownMenuItem onSelect={(e) => {
+                                e.preventDefault();
+                                startEditFloor(getActiveFloor());
+                            }}>
+                                Edit Current Floor...
+                            </DropdownMenuItem>
+
+
+                            <DropdownMenuItem
+                                className="text-red-600"
+                                onSelect={(e) => {
+                                    e.preventDefault();
+                                    handleDeleteFloor(getActiveFloor());
+                                }}
+                            >
+                                Delete Current Floor
+                            </DropdownMenuItem>
+                        </>
+                    )}
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+
+            {/* Add Floor Dialog */}
+            <Dialog open={isAddingFloor} onOpenChange={setIsAddingFloor}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>افزودن طبقه جدید</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="floorName">نام طبقه</Label>
+                            <Input
+                                id="floorName"
+                                value={newFloorName}
+                                onChange={(e) => setNewFloorName(e.target.value)}
+                                placeholder="به عنوان مثال طبقه دوم، بالکن و غیره"
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="floorLevel">شماره طبقه</Label>
+                            <Input
+                                id="floorLevel"
+                                type="number"
+                                value={newFloorLevel}
+                                onChange={(e) => setNewFloorLevel(parseInt(e.target.value) || 1)}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsAddingFloor(false)}>لغو</Button>
+                        <Button onClick={handleAddFloor}>افزودن طبقه</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+
+            {/* Edit Floor Dialog */}
+            <Dialog open={isEditingFloor} onOpenChange={setIsEditingFloor}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>ویرایش طبقه</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="editFloorName">نام طبقه</Label>
+                            <Input
+                                id="editFloorName"
+                                value={newFloorName}
+                                onChange={(e) => setNewFloorName(e.target.value)}
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="editFloorLevel">Floor Level</Label>
+                            <Input
+                                id="editFloorLevel"
+                                type="number"
+                                value={newFloorLevel}
+                                onChange={(e) => setNewFloorLevel(parseInt(e.target.value) || 1)}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEditingFloor(false)}>Cancel</Button>
+                        <Button onClick={handleEditFloor}>Update Floor</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
+    );
+};
+import React, {useEffect, useState} from "react";
+import {useSeatMapCanvas} from '@/hooks/useSeatMapCanvas';
+import {ZoomControls} from '@/components/canvas/ZoomControls';
+import {ToolSelector} from '@/components/canvas/ToolSelector';
+import {SeatElement} from '@/components/canvas/SeatElement';
+import {SectionElement} from "@/components/canvas/SectionElement";
+import {FloorSelector} from '@/components/canvas/FloorSelector';
+import {StageElement} from '@/components/canvas/StageElement';
+import {toast} from "sonner";
+import {Skeleton} from '@/components/ui/skeleton';
+
+
+interface SeatMapCanvasProps {
+editable: boolean;
+isLoading?: boolean;
+}
+
+
+export const SeatMapCanvas: React.FC<SeatMapCanvasProps> = ({editable, isLoading = false}) => {
+const {
+seatMap,
+selectedTool,
+setSelectedTool,
+scale,
+dragging,
+originX,
+originY,
+canvasRef,
+containerRef,
+removeElement,
+zoomIn,
+zoomOut,
+resetZoom,
+handleMouseDown,
+handleMouseMove,
+handleMouseUp,
+handleElementMouseDown,
+handleResizerMouseDown,
+handleCanvasClick
+} = useSeatMapCanvas();
+
+
+const [showHelp, setShowHelp] = useState<boolean>(false);
+
+
+useEffect(() => {
+// We'll use this effect to display toasts when needed
+if (selectedTool) {
+    const handleKeyPress = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+            setSelectedTool(null);
+        }
+    };
+    window.addEventListener('keydown', handleKeyPress);
+    return () => {
+        window.removeEventListener('keydown', handleKeyPress);
+    }
+}
+}, [selectedTool, setSelectedTool]);
+
+
+// Keyboard shortcut event listener
+useEffect(() => {
+if (!editable) return; // Only add shortcuts when canvas is editable
+
+
+const handleKeyboardShortcuts = (e: KeyboardEvent) => {
+    // Ignore shortcuts when user is typing in input fields
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+    }
+    
+    switch (e.key.toLowerCase()) {
+        case 's':
+            setSelectedTool(selectedTool === 'seat' ? null : 'seat');
+            toast(selectedTool === 'seat' ? "Seat tool deactivated" : "Seat tool activated", {
+                duration: 2000,
+            });
+            break;
+        case 'c':
+            setSelectedTool(selectedTool === 'section' ? null : 'section');
+            toast(selectedTool === 'section' ? "Section tool deactivated" : "Section tool activated", {
+                duration: 2000,
+            });
+            break;
+        case 't':
+            setSelectedTool(selectedTool === 'stage' ? null : 'stage');
+            toast(selectedTool === 'stage' ? "Stage tool deactivated" : "Stage tool activated", {
+                duration: 2000,
+            });
+            break;
+        case 'm':
+            setSelectedTool(selectedTool === 'move' ? null : 'move');
+            toast(selectedTool === 'move' ? "Move tool deactivated" : "Move tool activated", {
+                duration: 2000,
+            });
+            break;
+        case 'escape':
+            if (selectedTool) {
+                setSelectedTool(null);
+                toast("Tool selection canceled", {
+                    duration: 2000,
+                });
+            }
+            break;
+        case '+':
+        case '=':
+            zoomIn();
+            break;
+        case '-':
+            zoomOut();
+            break;
+        case '0':
+            resetZoom();
+            break;
+        case 'h':
+            setShowHelp(prev => !prev);
+            break;
+        default:
+            break;
+    }
+};
+
+
+window.addEventListener('keydown', handleKeyboardShortcuts);
+return () => {
+    window.removeEventListener('keydown', handleKeyboardShortcuts);
+};
+}, [editable, selectedTool, setSelectedTool, zoomIn, zoomOut, resetZoom]);
+
+
+// Get elements for current floor only
+const activeFloorId = seatMap.activeFloorId;
+const visibleSeats = seatMap.seats.filter(seat => seat.floorId === activeFloorId);
+const visibleSections = seatMap.sections.filter(section => section.floorId === activeFloorId);
+const showStage = seatMap.stage.floorId === activeFloorId;
+
+
+// Loading state content
+if (isLoading) {
+return (
+    <div className="relative w-full h-full flex flex-col">
+        <div className="absolute top-4 left-4 z-10">
+            <Skeleton className="h-8 w-24"/>
+        </div>
+        {editable && (
+            <div className="absolute top-4 right-4 z-10">
+                <Skeleton className="h-8 w-32"/>
+            </div>
+        )}
+        <div className="flex-1 relative overflow-hidden bg-gray-200 rounded-lg">
+            <div className="w-full h-full flex flex-col items-center justify-center">
+                <Skeleton className="h-8 w-48 mb-4"/>
+                <Skeleton className="h-24 w-64"/>
+                <div className="grid grid-cols-5 gap-4 mt-8">
+                    {Array(10).fill(0).map((_, i) => (
+                        <Skeleton key={i} className="h-5 w-5"/>
+                    ))}
+                </div>
+            </div>
+        </div>
+    </div>
+);
+}
+
+
+return (
+<div className="relative w-full h-full flex flex-col">
+    <ZoomControls
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onReset={resetZoom}
+    />
+    
+    {editable && (
+        <>
+            <ToolSelector
+                selectedTool={selectedTool}
+                onToolSelect={setSelectedTool}
+                setShowHelp={setShowHelp}
+                ShowHelp={showHelp}
+                
+            />
+            <div className="absolute top-4 right-4 z-10">
+                <FloorSelector/>
+            </div>
+        </>
+    )}
+    
+    <div
+        ref={containerRef}
+        className="flex-1 relative overflow-hidden bg-gray-200 rounded-lg"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+    >
+        <div
+            ref={canvasRef}
+            className="w-[3000px] h-[3000px] absolute origin-top-left"
+            style={{
+                cursor: dragging ? 'grabbing' : (selectedTool === 'move' ? 'grab' : 
+                       selectedTool === 'seat' ? 'cell' : 
+                       selectedTool === 'section' ? 'crosshair' : 
+                       selectedTool === 'stage' ? 'pointer' : 'default'),
+                backgroundColor: '#f8f9fa',
+                backgroundImage: 'radial-gradient(#e0e0e0 1px, transparent 1px)',
+                backgroundSize: '20px 20px',
+                transform: `scale(${scale}) translate(${originX}px, ${originY}px)`,
+                transformOrigin: '0 0',
+            }}
+            onClick={handleCanvasClick}
+        >
+            {showStage && (
+                <StageElement
+                    editable={editable}
+                    onMouseDown={handleElementMouseDown}
+                    onResizerMouseDown={handleResizerMouseDown}
+                />
+            )}
+            
+            {/* Sections */}
+            {visibleSections.map((section) => (
+                <SectionElement
+                    key={section.id}
+                    section={section}
+                    editable={editable}
+                    onMouseDown={handleElementMouseDown}
+                    onResizerMouseDown={handleResizerMouseDown}
+                    onRemove={removeElement}
+                />
+            ))}
+            
+            {/* Seats */}
+            {visibleSeats.map((seat) => (
+                <SeatElement
+                    key={seat.id}
+                    seat={seat}
+                    editable={editable}
+                    onMouseDown={handleElementMouseDown}
+                    onRemove={removeElement}
+                />
+            ))}
+        </div>
+        
+        {/* Status indicator */}
+        <div className="absolute bottom-20 right-4 p-2 bg-white/80 backdrop-blur-sm rounded-md text-xs text-gray-600 shadow-sm">
+            <p>Zoom: {Math.round(scale * 100)}%</p>
+            <p>Active Tool: {selectedTool || 'None'}</p>
+            <p>Seats: {visibleSeats.length}</p>
+            <p>Sections: {visibleSections.length}</p>
+        </div>
+    </div>
+    
+    {editable && showHelp && (
+        <div
+            className="absolute bottom-4 right-4 p-3 bg-white/90 backdrop-blur-sm rounded-md text-xs text-gray-600 shadow-sm max-w-xs"
+            dir="rtl"
+        >
+            <p className="font-semibold mb-2">شورتکات‌های کیبورد:</p>
+            <div className="grid grid-cols-2 gap-2">
+                <span><kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded">S</kbd> ابزار صندلی</span>
+                <span><kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded">C</kbd> ابزار بخش</span>
+                <span><kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded">T</kbd> ابزار صحنه</span>
+                <span><kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded">M</kbd> ابزار حرکت</span>
+                <span><kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded">+</kbd> بزرگنمایی</span>
+                <span><kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded">-</kbd> کوچک‌نمایی</span>
+                <span><kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded">0</kbd> اندازه اصلی</span>
+                <span><kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded">H</kbd> راهنما</span>
+                <span><kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded">Esc</kbd> لغو ابزار</span>
+            </div>
+            
+            <p className="font-semibold mt-3 mb-1">راهنمای استفاده:</p>
+            <ul className="list-disc list-inside space-y-1">
+                <li>برای حرکت دادن نقشه، ابزار حرکت را انتخاب کنید یا هیچ ابزاری انتخاب نکنید و سپس بکشید.</li>
+                <li>برای جابجایی صندلی‌ها، بخش‌ها یا صحنه، روی آنها کلیک کرده و بکشید.</li>
+                <li>برای تغییر اندازه بخش‌ها یا صحنه، از دستگیره گوشه پایین راست استفاده کنید.</li>
+                <li>برای حذف یک عنصر، روی دکمه ضربدر قرمز کلیک کنید.</li>
+            </ul>
+        </div>
+    )}
+    
+    {editable && !showHelp && (
+        <div
+            className="absolute bottom-4 right-4 p-2 bg-white/80 backdrop-blur-sm rounded-md text-xs text-gray-600 shadow-sm"
+            dir="rtl"
+        >
+            <p>برای نمایش راهنما، دکمه "Show Help" را بزنید یا کلید <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded">H</kbd> را فشار دهید.</p>
+        </div>
+    )}
+</div>
+);
+};
+
+import React, {useState} from "react";
+import {useSeatMapStore, type Seat} from '@/stores/seatMapStore';
+import {Tabs, TabsList, TabsContent, TabsTrigger} from "@/components/ui/tabs";
+import {Separator} from "@/components/ui/separator";
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select";
+import {Button} from "@/components/ui/button";
+import {Label} from "@/components/ui/label";
+import {RadioGroup, RadioGroupItem} from "@/components/ui/radio-group";
+import {Input} from "@/components/ui/input";
+import {Slider} from "@/components/ui/slider";
+import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter} from '@/components/ui/dialog';
+import {toast} from "sonner"
+
+
+export const SeatToolbar: React.FC = () => {
+    const {addSeat, addSection, updateStage, setSeatMap} = useSeatMapStore();
+    const [seatType, setSeatType] = useState('regular');
+    const [seatStatus, setSeatStatus] = useState('available');
+    const [sectionColor, setSectionColor] = useState('#D3E4FD');
+    const [rowLabel, setRowLabel] = useState('A');
+    const [startNumber, setStartNumber] = useState(1);
+    const [sectionName, setSectionName] = useState('Main Section');
+    const [rowCount, setRowCount] = useState(10);
+    const [seatsPerRow, setSeatsPerRow] = useState(10);
+    const [sectionWidth, setSectionWidth] = useState(200);
+    const [sectionHeight, setSectionHeight] = useState(150);
+    const [showSeatGridDialog, setShowSeatGridDialog] = useState(false);
+    const [showSectionGridDialog, setShowSectionGridDialog] = useState(false);
+    const [template, setTemplate] = useState(null);
+
+
+    // Generate a grid of seats
+    const handleGenerateGrid = () => {
+        setShowSeatGridDialog(true);
+    };
+
+
+    // Generate seats within a grid
+    const generateSeats = (gridX: number, gridY: number, spacing: number, rowCount: number, seatsPerRow: number) => {
+        const seats: Seat[] = [];
+        const seatSize = 20; // Standard seat size
+        const rowChar = rowLabel.charCodeAt(0);
+
+
+        for (let row = 0; row < rowCount; row++) {
+            const currentRowLabel = String.fromCharCode(rowChar + row);
+
+
+            for (let seat = 0; seat < seatsPerRow; seat++) {
+                const seatNumber = startNumber + seat;
+                seats.push({
+                    id: `seat-${Date.now()}-${currentRowLabel}-${seatNumber}`,
+                    x: gridX + (seat * (seatSize + spacing)),
+                    y: gridY + (row * (seatSize + spacing)),
+                    type: seatType as 'regular' | 'vip' | 'disabled',
+                    row: currentRowLabel,
+                    number: seatNumber,
+                    status: seatStatus as 'available' | 'selected' | 'sold' | 'disabled'
+                });
+            }
+        }
+
+
+        return seats;
+    };
+
+
+    // Place seats in grid formation
+    const placeSeatGrid = (x: number, y: number, spacing: number, rows: number, cols: number) => {
+        const seats = generateSeats(x, y, spacing, rows, cols);
+        seats.forEach(seat => addSeat(seat));
+
+
+        toast("Seats Generated", {
+            description: `Added ${seats.length} seats to the canvas`
+        });
+
+
+        setShowSeatGridDialog(false);
+    };
+
+
+    // Create a section and fill it with seats
+    const handleAutoFillSection = () => {
+        setShowSectionGridDialog(true);
+    };
+
+
+    // Create section with auto-filled seats
+    const createSectionWithSeats = (x: number, y: number, rows: number, cols: number, spacing: number) => {
+        // Add the section
+        const sectionId = `section-${Date.now()}`;
+        const calculatedWidth = cols * (20 + spacing) - spacing;
+        const calculatedHeight = rows * (20 + spacing) - spacing;
+
+
+        addSection({
+            id: sectionId,
+            x,
+            y,
+            width: calculatedWidth,
+            height: calculatedHeight,
+            name: sectionName,
+            color: sectionColor
+        });
+
+
+        // Add seats within the section
+        const seats = generateSeats(x + 10, y + 10, spacing, rows, cols);
+        seats.forEach(seat => addSeat(seat));
+
+
+        toast("Section Created", {
+            description: `Section "${sectionName}" with ${seats.length} seats added`
+        });
+
+
+        setShowSectionGridDialog(false);
+    };
+
+
+    // Apply venue template
+    const applyTemplate = () => {
+        if (template === null) return;
+
+
+        // Get current floor ID
+        const {activeFloorId} = useSeatMapStore.getState().seatMap;
+
+
+        const baseWidth = 3000;
+        const baseHeight = 3000;
+
+
+        switch (template) {
+            case 'theater': {
+                // Theater style layout with central stage and fan-like seating
+                updateStage({
+                    x: baseWidth / 2 - 300,
+                    y: 150,
+                    width: 600,
+                    height: 80,
+                    name: 'STAGE',
+                    floorId: activeFloorId
+                });
+
+
+                // Orchestra section
+                addSection({
+                    id: `section-${Date.now()}-orchestra`,
+                    x: baseWidth / 2 - 250,
+                    y: 250,
+                    width: 500,
+                    height: 400,
+                    name: 'Orchestra',
+                    color: '#D3E4FD',
+                    floorId: activeFloorId
+                });
+
+
+                // Mezzanine section
+                addSection({
+                    id: `section-${Date.now()}-mezzanine`,
+                    x: baseWidth / 2 - 350,
+                    y: 680,
+                    width: 700,
+                    height: 300,
+                    name: 'Mezzanine',
+                    color: '#FDE1D3',
+                    floorId: activeFloorId
+                });
+
+
+                // Balcony section
+                addSection({
+                    id: `section-${Date.now()}-balcony`,
+                    x: baseWidth / 2 - 400,
+                    y: 1010,
+                    width: 800,
+                    height: 250,
+                    name: 'Balcony',
+                    color: '#F2FCE2',
+                    floorId: activeFloorId
+                });
+
+
+                // Add some example seats
+                const orchestraSeats = generateSeats(baseWidth / 2 - 200, 280, 10, 10, 20);
+                orchestraSeats.forEach(seat => addSeat(seat));
+
+
+                toast("Theater Template Applied", {
+                    description: "Created stage and seating sections"
+                });
+                break;
+            }
+            case 'concert': {
+                // Concert hall with stage and various seating sections
+                updateStage({
+                    x: baseWidth / 2 - 400,
+                    y: 150,
+                    width: 800,
+                    height: 200,
+                    name: 'STAGE',
+                    floorId: activeFloorId
+                });
+
+
+                // Front section
+                addSection({
+                    id: `section-${Date.now()}-front`,
+                    x: baseWidth / 2 - 350,
+                    y: 400,
+                    width: 700,
+                    height: 300,
+                    name: 'Front Section',
+                    color: '#D946EF',
+                    floorId: activeFloorId
+                });
+
+
+                // Mid section
+                addSection({
+                    id: `section-${Date.now()}-mid`,
+                    x: baseWidth / 2 - 450,
+                    y: 750,
+                    width: 900,
+                    height: 350,
+                    name: 'Middle Section',
+                    color: '#9b87f5',
+                    floorId: activeFloorId
+                });
+
+
+                // Rear section
+                addSection({
+                    id: `section-${Date.now()}-rear`,
+                    x: baseWidth / 2 - 500,
+                    y: 1150,
+                    width: 1000,
+                    height: 400,
+                    name: 'Rear Section',
+                    color: '#D3E4FD',
+                    floorId: activeFloorId
+                });
+
+
+                toast("Concert Hall Template Applied", {
+                    description: "Created stage and seating areas"
+                });
+                break;
+            }
+            case 'stadium': {
+                // Stadium with central field and surrounding seating
+                // Field/court
+                addSection({
+                    id: `section-${Date.now()}-field`,
+                    x: baseWidth / 2 - 400,
+                    y: baseHeight / 2 - 250,
+                    width: 800,
+                    height: 500,
+                    name: 'Field',
+                    color: '#F2FCE2',
+                    floorId: activeFloorId
+                });
+
+
+                // North stands
+                addSection({
+                    id: `section-${Date.now()}-north`,
+                    x: baseWidth / 2 - 400,
+                    y: baseHeight / 2 - 400,
+                    width: 800,
+                    height: 100,
+                    name: 'North Stand',
+                    color: '#FDE1D3',
+                    floorId: activeFloorId
+                });
+
+
+                // South stands
+                addSection({
+                    id: `section-${Date.now()}-south`,
+                    x: baseWidth / 2 - 400,
+                    y: baseHeight / 2 + 300,
+                    width: 800,
+                    height: 100,
+                    name: 'South Stand',
+                    color: '#FDE1D3',
+                    floorId: activeFloorId
+                });
+
+
+                // East stands
+                addSection({
+                    id: `section-${Date.now()}-east`,
+                    x: baseWidth / 2 - 550,
+                    y: baseHeight / 2 - 250,
+                    width: 100,
+                    height: 500,
+                    name: 'East Stand',
+                    color: '#E5DEFF',
+                    floorId: activeFloorId
+                });
+
+
+                // West stands
+                addSection({
+                    id: `section-${Date.now()}-west`,
+                    x: baseWidth / 2 + 450,
+                    y: baseHeight / 2 - 250,
+                    width: 100,
+                    height: 500,
+                    name: 'West Stand',
+                    color: '#E5DEFF',
+                    floorId: activeFloorId
+                });
+
+
+                toast("Stadium Template Applied", {
+                    description: "Created field and stands"
+                });
+                break;
+            }
+            case 'conference': {
+                // Conference room with presentation area
+                updateStage({
+                    x: baseWidth / 2 - 250,
+                    y: 150,
+                    width: 500,
+                    height: 100,
+                    name: 'PODIUM',
+                    floorId: activeFloorId
+                });
+
+
+                // Main seating area
+                addSection({
+                    id: `section-${Date.now()}-main`,
+                    x: baseWidth / 2 - 350,
+                    y: 300,
+                    width: 700,
+                    height: 600,
+                    name: 'Main Seating',
+                    color: '#F1F0FB',
+                    floorId: activeFloorId
+                });
+
+
+                // Add some example seats in classroom style rows
+                const conferenceSeats = generateSeats(baseWidth / 2 - 300, 330, 15, 12, 14);
+                conferenceSeats.forEach(seat => addSeat(seat));
+
+
+                toast("Conference Template Applied", {
+                    description: "Created podium and seating area"
+                });
+                break;
+            }
+            default:
+                toast("Template Not Found", {
+                    description: "Selected template could not be applied"
+                });
+        }
+    };
+
+
+    return (
+        <div className="p-4 h-full overflow-y-auto">
+            <h2 className="font-semibold text-lg mb-4">
+                ابزارهای طراحی
+            </h2>
+
+
+            <Tabs defaultValue="seat" className="w-full" dir="rtl">
+                <TabsList className="grid grid-cols-2 mb-4">
+                    <TabsTrigger value="seat">
+                        صندلی‌ها
+                    </TabsTrigger>
+                    <TabsTrigger value="section">
+                        بخش‌ها
+                    </TabsTrigger>
+                </TabsList>
+
+
+                <TabsContent value="seat" className="space-y-6">
+                    <div className="space-y-4">
+                        <div>
+                            <Label className="text-sm font-medium">
+                                نوع صندلی
+                            </Label>
+                            <RadioGroup
+                                defaultValue="regular"
+                                value={seatType}
+                                onValueChange={setSeatType}
+                                className="flex flex-col space-y-1 mt-2"
+                                dir="rtl"
+                            >
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="regular" id="seat-regular"/>
+                                    <Label htmlFor="seat-regular" className="cursor-pointer">عادی</Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="vip" id="seat-vip"/>
+                                    <Label htmlFor="seat-vip" className="cursor-pointer">ویژه</Label>
+                                </div>
+                            </RadioGroup>
+                        </div>
+
+
+                        <div>
+                            <Label className="text-sm font-medium">وضعیت صندلی</Label>
+                            <RadioGroup
+                                defaultValue="available"
+                                value={seatStatus}
+                                onValueChange={setSeatStatus}
+                                className="flex flex-col space-y-1 mt-2"
+                                dir="rtl"
+                            >
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="available" id="status-available"/>
+                                    <Label htmlFor="status-available" className="cursor-pointer">فعال</Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="disabled" id="status-disabled"/>
+                                    <Label htmlFor="status-disabled" className="cursor-pointer">غیرفعال</Label>
+                                </div>
+                            </RadioGroup>
+                        </div>
+
+
+                        <Separator/>
+
+
+                        <div>
+                            <Label htmlFor="row" className="text-sm font-medium">عنوان ردیف</Label>
+                            <Input
+                                id="row"
+                                className="mt-1"
+                                placeholder="A"
+                                value={rowLabel}
+                                onChange={(e) => setRowLabel(e.target.value)}
+                            />
+                        </div>
+
+
+                        <div>
+                            <Label htmlFor="startNumber" className="text-sm font-medium">شماره شروع</Label>
+                            <Input
+                                id="startNumber"
+                                className="mt-1"
+                                type="number"
+                                min="1"
+                                value={startNumber}
+                                onChange={(e) => setStartNumber(parseInt(e.target.value))}
+                            />
+                        </div>
+
+
+                        <div className="pt-2">
+                            <Button onClick={handleGenerateGrid} className="w-full bg-cyan-300 hover:bg-cyan-400">
+                                ایجاد صندلی‌ها
+                            </Button>
+                        </div>
+                    </div>
+                </TabsContent>
+                <TabsContent value="section" className="space-y-6">
+                    <div className="space-y-4">
+                        <div>
+                            <Label htmlFor="sectionName" className="text-sm font-medium">نام بخش</Label>
+                            <Input
+                                id="sectionName"
+                                className="mt-1"
+                                placeholder="Main Floor"
+                                value={sectionName}
+                                onChange={(e) => setSectionName(e.target.value)}
+                            />
+                        </div>
+
+
+                        <div>
+                            <Label htmlFor="sectionColor" className="text-sm font-medium">رنگ بخش</Label>
+                            <div className="flex mt-1 space-x-2">
+                                <div
+                                    className="w-8 h-8 rounded border border-gray-300"
+                                    style={{backgroundColor: sectionColor}}
+                                />
+                                <Input
+                                    id="sectionColor"
+                                    type="color"
+                                    value={sectionColor}
+                                    onChange={(e) => setSectionColor(e.target.value)}
+                                    className="w-full h-8"
+                                />
+                            </div>
+                        </div>
+
+
+                        <div>
+                            <Label htmlFor="sectionWidth" className="text-sm font-medium">عرض</Label>
+                            <div className="flex items-center space-x-2 mt-1">
+                                <Slider
+                                    value={[sectionWidth]}
+                                    max={800}
+                                    min={50}
+                                    step={10}
+                                    onValueChange={(value) => setSectionWidth(value[0])}
+                                    className="w-full"
+                                />
+                                <span className="text-sm w-16">{sectionWidth}px</span>
+                            </div>
+                        </div>
+
+
+                        <div>
+                            <Label htmlFor="sectionHeight" className="text-sm font-medium">ارتفاع</Label>
+                            <div className="flex items-center space-x-2 mt-1">
+                                <Slider
+                                    value={[sectionHeight]}
+                                    max={600}
+                                    min={50}
+                                    step={10}
+                                    onValueChange={(value) => setSectionHeight(value[0])}
+                                    className="w-full"
+                                />
+                                <span className="text-sm w-16">{sectionHeight}px</span>
+                            </div>
+                        </div>
+
+
+                        <Separator/>
+
+
+                        <div>
+                            <Label htmlFor="rowCount" className="text-sm font-medium">تعداد ردیف</Label>
+                            <Input
+                                id="rowCount"
+                                className="mt-1"
+                                type="number"
+                                min="1"
+                                value={rowCount}
+                                onChange={(e) => setRowCount(parseInt(e.target.value))}
+                            />
+                        </div>
+
+
+                        <div>
+                            <Label htmlFor="seatsPerRow" className="text-sm font-medium">صندلی در هر ردیف</Label>
+                            <Input
+                                id="seatsPerRow"
+                                className="mt-1"
+                                type="number"
+                                min="1"
+                                value={seatsPerRow}
+                                onChange={(e) => setSeatsPerRow(parseInt(e.target.value))}
+                            />
+                        </div>
+
+
+                        <div className="pt-2">
+                            <Button onClick={handleAutoFillSection}
+                                    className="w-full bg-amber-300 text-black hover:bg-amber-400">
+                                پرکردن خودکار بخش
+                            </Button>
+                        </div>
+                    </div>
+                </TabsContent>
+            </Tabs>
+
+
+            <Separator className="my-6"/>
+
+
+            <div className="space-y-4">
+                <h3 className="font-medium">طرح‌های آماده</h3>
+                <Select onValueChange={setTemplate} dir="rtl">
+                    <SelectTrigger className="w-full">
+                        <SelectValue placeholder="انتخاب طرح"/>
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="theater">تئاتر</SelectItem>
+                        <SelectItem value="concert">سالن کنسرت</SelectItem>
+                        <SelectItem value="stadium">استادیوم</SelectItem>
+                        <SelectItem value="conference">کنفرانس</SelectItem>
+                    </SelectContent>
+                </Select>
+
+
+                <Button variant="outline" className="w-full" onClick={applyTemplate}>
+                    اعمال طرح
+                </Button>
+            </div>
+
+
+            {/* Seat Grid Dialog */}
+            <Dialog open={showSeatGridDialog} onOpenChange={setShowSeatGridDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Generate Seat Grid</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <Label htmlFor="gridX">X Position</Label>
+                                <Input id="gridX" type="number" defaultValue={800}/>
+                            </div>
+                            <div>
+                                <Label htmlFor="gridY">Y Position</Label>
+                                <Input id="gridY" type="number" defaultValue={400}/>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <Label htmlFor="gridRows">Rows</Label>
+                                <Input id="gridRows" type="number" min="1" defaultValue={rowCount}/>
+                            </div>
+                            <div>
+                                <Label htmlFor="gridCols">Columns</Label>
+                                <Input id="gridCols" type="number" min="1" defaultValue={seatsPerRow}/>
+                            </div>
+                        </div>
+                        <div>
+                            <Label htmlFor="gridSpacing">Spacing (px)</Label>
+                            <Input id="gridSpacing" type="number" min="0" defaultValue={5}/>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowSeatGridDialog(false)}>Cancel</Button>
+                        <Button onClick={() => {
+                            const x = parseInt((document.getElementById('gridX') as HTMLInputElement).value);
+                            const y = parseInt((document.getElementById('gridY') as HTMLInputElement).value);
+                            const rows = parseInt((document.getElementById('gridRows') as HTMLInputElement).value);
+                            const cols = parseInt((document.getElementById('gridCols') as HTMLInputElement).value);
+                            const spacing = parseInt((document.getElementById('gridSpacing') as HTMLInputElement).value);
+                            placeSeatGrid(x, y, spacing, rows, cols);
+                        }}>Generate Seats</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+
+            {/* Section Grid Dialog */}
+            <Dialog open={showSectionGridDialog} onOpenChange={setShowSectionGridDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Create Section with Seats</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <Label htmlFor="sectionX">X Position</Label>
+                                <Input id="sectionX" type="number" defaultValue={800}/>
+                            </div>
+                            <div>
+                                <Label htmlFor="sectionY">Y Position</Label>
+                                <Input id="sectionY" type="number" defaultValue={400}/>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <Label htmlFor="sectionRows">Rows</Label>
+                                <Input id="sectionRows" type="number" min="1" value={rowCount}
+                                       onChange={(e) => setRowCount(parseInt(e.target.value))}/>
+                            </div>
+                            <div>
+                                <Label htmlFor="sectionCols">Columns</Label>
+                                <Input id="sectionCols" type="number" min="1" value={seatsPerRow}
+                                       onChange={(e) => setSeatsPerRow(parseInt(e.target.value))}/>
+                            </div>
+                        </div>
+                        <div>
+                            <Label htmlFor="seatSpacing">Seat Spacing (px)</Label>
+                            <Input id="seatSpacing" type="number" min="0" defaultValue={10}/>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowSectionGridDialog(false)}>Cancel</Button>
+                        <Button onClick={() => {
+                            const x = parseInt((document.getElementById('sectionX') as HTMLInputElement).value);
+                            const y = parseInt((document.getElementById('sectionY') as HTMLInputElement).value);
+                            const rows = parseInt((document.getElementById('sectionRows') as HTMLInputElement).value);
+                            const cols = parseInt((document.getElementById('sectionCols') as HTMLInputElement).value);
+                            const spacing = parseInt((document.getElementById('seatSpacing') as HTMLInputElement).value);
+                            createSectionWithSeats(x, y, rows, cols, spacing);
+                        }}>Create Section</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
+    )
+};
+
+اینها هم کد هاش هستند
