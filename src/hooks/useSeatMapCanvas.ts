@@ -3,7 +3,7 @@ import {useSeatMapStore} from '@/stores/seatMapStore';
 import * as React from "react";
 
 export function useSeatMapCanvas() {
-    const {seatMap, addSeat, removeElement, addSection, updateElement, updateStage} = useSeatMapStore();
+    const {seatMap, addSeat, removeElement, addSection, updateElement, updateStage , setSeatMap} = useSeatMapStore();
     const [selectedTool, setSelectedTool] = useState<string | null>(null);
     const [scale, setScale] = useState(1);
     const [dragging, setDragging] = useState(false);
@@ -33,22 +33,16 @@ export function useSeatMapCanvas() {
         if (containerRef.current && canvasRef.current) {
             const containerWidth = containerRef.current.clientWidth;
             const containerHeight = containerRef.current.clientHeight;
-
             const viewportCenterX = containerWidth / 2;
             const viewportCenterY = containerHeight / 2;
-
-            // Calculate the center of the canvas
-            //const canvasCenterX = 1500; // Half of canvas width (3000px)
-            //const canvasCenterY = 1500; // Half of canvas height (3000px)
-
+            
             // Calculate origin to center the stage
             const stageX = seatMap.stage.x + (seatMap.stage.width / 2);
             const stageY = seatMap.stage.y + (seatMap.stage.height / 2);
-
+            
             // Position the origin so the stage is centered
             const newOriginX = viewportCenterX / scale - stageX;
             const newOriginY = viewportCenterY / scale - stageY;
-
             setOriginX(newOriginX);
             setOriginY(newOriginY);
         }
@@ -65,24 +59,19 @@ export function useSeatMapCanvas() {
 
     const resetZoom = () => {
         setScale(1);
-        // setOriginX(0);
-        // setOriginY(0);
-
         if (containerRef.current) {
             const containerWidth = containerRef.current.clientWidth;
             const containerHeight = containerRef.current.clientHeight;
-
             const viewportCenterX = containerWidth / 2;
             const viewportCenterY = containerHeight / 2;
-
+            
             // Calculate the center of the canvas
             const stageX = seatMap.stage.x + (seatMap.stage.width / 2);
             const stageY = seatMap.stage.y + (seatMap.stage.height / 2);
-
+            
             // Position the origin so the stage is centered
             const newOriginX = viewportCenterX - stageX;
             const newOriginY = viewportCenterY - stageY;
-
             setOriginX(newOriginX);
             setOriginY(newOriginY);
         }
@@ -91,10 +80,8 @@ export function useSeatMapCanvas() {
     // Pan functionality
     const handleMouseDown = (e: React.MouseEvent) => {
         if (!canvasRef.current || draggedElement || resizing) return;
-
         // Only pan if the move tool is selected or no tool is selected
         if (selectedTool !== null && selectedTool !== 'move') return;
-
         setDragging(true);
         setStartX(e.clientX);
         setStartY(e.clientY);
@@ -105,17 +92,15 @@ export function useSeatMapCanvas() {
             handleElementMouseMove(e);
             return;
         }
-
         if (resizing) {
             handleResizerMouseMove(e);
             return;
         }
-
         if (!dragging) return;
-
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
-
+        setOriginX(originX + dx / scale);
+        setOriginY(originY + dy / scale);
         setOriginX(originX + dx / scale);
         setOriginY(originY + dy / scale);
         setStartX(e.clientX);
@@ -131,40 +116,32 @@ export function useSeatMapCanvas() {
     // Element drag handlers
     const handleElementMouseDown = (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-
         if (id === "stage") {
             const startX = e.clientX;
             const startY = e.clientY;
             const initialLeft = seatMap.stage.x;
             const initialTop = seatMap.stage.y;
-
             setDraggedElement({id, startX, startY, initialLeft, initialTop});
             return;
         }
-
         const element = e.currentTarget as HTMLElement;
         const startX = e.clientX;
         const startY = e.clientY;
         const initialLeft = parseInt(element.style.left || '0', 10);
         const initialTop = parseInt(element.style.top || '0', 10);
-
         setDraggedElement({id, startX, startY, initialLeft, initialTop});
     };
 
     const handleElementMouseMove = (e: React.MouseEvent) => {
         if (!draggedElement) return;
-
         const dx = (e.clientX - draggedElement.startX) / scale;
         const dy = (e.clientY - draggedElement.startY) / scale;
-
         const newX = draggedElement.initialLeft + dx;
         const newY = draggedElement.initialTop + dy;
-
         if (draggedElement.id === "stage") {
             updateStage({x: newX, y: newY});
             return;
         }
-
         updateElement(draggedElement.id, {x: newX, y: newY});
     };
 
@@ -175,29 +152,21 @@ export function useSeatMapCanvas() {
     // Resize handlers
     const handleResizerMouseDown = (e: React.MouseEvent, id: string, width: number, height: number) => {
         e.stopPropagation();
-
-        //if (!editable) return;
-
         const startX = e.clientX;
         const startY = e.clientY;
-
         setResizing({id, startX, startY, initialWidth: width, initialHeight: height});
     };
 
     const handleResizerMouseMove = (e: React.MouseEvent) => {
         if (!resizing) return;
-
         const dx = (e.clientX - resizing.startX) / scale;
         const dy = (e.clientY - resizing.startY) / scale;
-
         const newWidth = Math.max(50, resizing.initialWidth + dx);
         const newHeight = Math.max(50, resizing.initialHeight + dy);
-
         if (resizing.id === "stage") {
             updateStage({width: newWidth, height: newHeight});
             return;
         }
-
         updateElement(resizing.id, {width: newWidth, height: newHeight});
     };
 
@@ -208,13 +177,10 @@ export function useSeatMapCanvas() {
     // Canvas click handler
     const handleCanvasClick = (e: React.MouseEvent) => {
         if (!selectedTool || draggedElement || resizing) return;
-
         if (!canvasRef.current) return;
         const rect = canvasRef.current.getBoundingClientRect();
-
         const clickX = (e.clientX - rect.left) / scale;
         const clickY = (e.clientY - rect.top) / scale;
-
         if (selectedTool === 'seat') {
             addSeat({
                 id: `seat-${Date.now()}`,
@@ -246,6 +212,17 @@ export function useSeatMapCanvas() {
         }
     };
 
+    // Handle section updates (for name changes, etc.)
+// Example of how the onUpdate function should be implemented in parent component
+const handleSectionUpdate = (id: string, updates: any) => {
+    setSeatMap(prevSeatMap => ({
+      ...prevSeatMap,
+      sections: prevSeatMap.sections.map(section => 
+        section.id === id ? { ...section, ...updates } : section
+      )
+    }));
+  };
+
     return {
         seatMap,
         selectedTool,
@@ -259,6 +236,7 @@ export function useSeatMapCanvas() {
         removeElement,
         addSeat,
         addSection,
+        updateElement: handleSectionUpdate,
         zoomIn,
         zoomOut,
         resetZoom,
@@ -270,3 +248,8 @@ export function useSeatMapCanvas() {
         handleCanvasClick,
     };
 }
+
+
+
+
+

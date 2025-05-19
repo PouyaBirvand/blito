@@ -334,15 +334,15 @@ export const SeatToolbar: React.FC = () => {
                 ابزارهای طراحی
             </h2>
 
-            <Tabs defaultValue="seat" className="w-full" dir="rtl">
-                <TabsList className="grid grid-cols-2 mb-4">
+            <Tabs defaultValue="section" className="w-full" dir="rtl">
+                {/* <TabsList className="grid grid-cols-2 mb-4">
                     <TabsTrigger value="seat">
                         صندلی‌ها
                     </TabsTrigger>
                     <TabsTrigger value="section">
                         بخش‌ها
                     </TabsTrigger>
-                </TabsList>
+                </TabsList> */}
 
                 <TabsContent value="seat" className="space-y-6">
                     <div className="space-y-4">

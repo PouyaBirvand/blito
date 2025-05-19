@@ -1,13 +1,14 @@
-import React from 'react';
-import { useSeatMapStore, type Seat } from '@/stores/seatMapStore';
-import { Skeleton } from '@/components/ui/skeleton';
+import React, { useState } from 'react';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipBoard';
 
 interface SeatElementProps {
-  seat: Seat;
+  seat: any;
   editable: boolean;
   onMouseDown: (e: React.MouseEvent, id: string) => void;
   onRemove: (id: string) => void;
-  isLoading?: boolean;
+  isInsideSection?: boolean;
+  sectionX?: number;
+  sectionY?: number;
 }
 
 export const SeatElement: React.FC<SeatElementProps> = ({
@@ -15,25 +16,34 @@ export const SeatElement: React.FC<SeatElementProps> = ({
   editable,
   onMouseDown,
   onRemove,
-  isLoading = false
+  isInsideSection = false,
+  sectionX = 0,
+  sectionY = 0
 }) => {
-  const { seatMap } = useSeatMapStore();
   const seatSize = 20;
+
+const { copyToClipboard } = useCopyToClipboard();
+const [isHovered, setIsHovered] = useState(false);
+
+const handleMouseEnter = () => {
+  if (editable) {
+    setIsHovered(true);
+  }
+};
+
+const handleMouseLeave = () => {
+  setIsHovered(false);
+};
+
+  
+  // تعیین رنگ صندلی بر اساس نوع و وضعیت
   let bgColor = '';
-  
-  // Find the section this seat belongs to
-  const seatSection = seatMap.sections.find(section => section.id === seat.sectionId);
-  
-  // Set background color based on seat type and status
   if (seat.type === 'vip') {
-    bgColor = '#D946EF'; // Vibrant pink for VIP seats
+    bgColor = '#D946EF'; // صورتی برای صندلی‌های VIP
   } else if (seat.type === 'disabled') {
-    bgColor = '#33C3F0'; // Blue for disabled access seats
-  } else if (seatSection) {
-    // Use section color if available
-    bgColor = seatSection.color;
+    bgColor = '#33C3F0'; // آبی برای صندلی‌های معلولین
   } else {
-    // Regular seats get color based on status
+    // صندلی‌های معمولی بر اساس وضعیت رنگ می‌گیرند
     switch (seat.status) {
       case 'available':
         bgColor = '#9b87f5';
@@ -52,48 +62,63 @@ export const SeatElement: React.FC<SeatElementProps> = ({
     }
   }
   
-  // Add different shape for disabled access seats
+  // شکل متفاوت برای صندلی‌های معلولین
   const borderRadius = seat.type === 'disabled' ? '50%' : '0.375rem';
-  // Different styles for VIP seats (diamond shape)
+  // شکل متفاوت برای صندلی‌های VIP (لوزی)
   const transform = seat.type === 'vip' ? 'rotate(45deg)' : 'none';
   
-  if (isLoading) {
-    return (
-      <div className="absolute flex flex-col items-center" style={{
-        left: seat.x + 'px',
-        top: seat.y + 'px',
-      }}>
-        <Skeleton className="h-3 w-8 mb-0.5"/>
-        <Skeleton className="h-5 w-5"/>
-      </div>
-    );
-  }
+  // محاسبه موقعیت بر اساس اینکه صندلی داخل بخش است یا نه
+  const left = isInsideSection ? (seat.relativeX || (seat.x - sectionX)) : seat.x;
+  const top = isInsideSection ? (seat.relativeY || (seat.y - sectionY)) : seat.y;
   
-  // Handle drag operation
-  const handleSeatMouseDown = (e: React.MouseEvent) => {
-    if (editable) {
-      e.stopPropagation();
-      onMouseDown(e, seat.id);
-    }
+  // تابع برای کپی کردن شناسه صندلی
+  const handleCopyId = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    copyToClipboard(seat.id, 'شناسه صندلی کپی شد');
   };
   
-  // Handle delete button click
-  const handleDeleteClick = (e: React.MouseEvent) => {
+  // تابع برای نمایش/مخفی کردن شناسه
+  const toggleShowId = (e: React.MouseEvent) => {
     e.stopPropagation();
+    setShowId(!showId);
+  };
+  
+  // تابع برای مدیریت کلیک راست
+  const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    onRemove(seat.id);
+    if (editable) {
+      toggleShowId(e);
+    }
   };
   
   return (
     <div
-      className="absolute flex flex-col items-center"
+      className="flex flex-col items-center absolute"
       style={{
-        left: seat.x + 'px',
-        top: seat.y + 'px',
+        left: left + 'px',
+        top: top + 'px',
       }}
     >
-      {/* Row label above seat */}
+      {/* برچسب ردیف بالای صندلی */}
       <div className="text-xs font-medium mb-0.5 text-gray-600">{seat.row}</div>
+      
+      {/* نمایش شناسه صندلی هنگام هاور */}
+      {isHovered && (
+        <div 
+          className="absolute -top-8 text-nowrap !text-black font-semibold  left-1/2 transform -translate-x-1/2 bg-gray-100 rounded px-2 py-1 border border-gray-300 shadow-sm z-20 flex items-center"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span className="text-xs text-gray-600 mr-1 select-all">
+            {seat.id}
+          </span>
+          <button
+            className="ml-1 text-blue-600 hover:text-blue-800"
+            onClick={handleCopyId}
+            title="کپی شناسه"
+          >
+          </button>
+        </div>
+      )}
       
       <div
         className={`flex items-center justify-center text-white text-xs font-bold select-none ${editable ? 'cursor-move group' : ''}`}
@@ -105,8 +130,16 @@ export const SeatElement: React.FC<SeatElementProps> = ({
           transform: transform,
           position: 'relative',
         }}
-        onMouseDown={handleSeatMouseDown}
-        title={`${seat.row}${seat.number} (${seat.type})${seatSection ? ' in ' + seatSection.name : ''}`}
+        onMouseDown={(e) => editable && onMouseDown(e, seat.id)}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          if (editable) {
+            copyToClipboard(seat.id, 'شناسه صندلی کپی شد');
+          }
+        }}
+        title={`${seat.row}${seat.number} (${seat.type || 'regular'})`}
       >
         <span style={{transform: seat.type === 'vip' ? 'rotate(-45deg)' : 'none'}}>
           {seat.number}
@@ -116,10 +149,9 @@ export const SeatElement: React.FC<SeatElementProps> = ({
           <button
             type="button"
             className="absolute -top-2 -right-2 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 text-xs z-10"
-            onClick={handleDeleteClick}
-            onMouseDown={(e) => {
-              // Prevent event from bubbling to parent elements
+            onClick={(e) => {
               e.stopPropagation();
+              onRemove(seat.id);
             }}
             style={{transform: 'none'}}
           >

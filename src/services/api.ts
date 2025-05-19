@@ -105,106 +105,195 @@ export const convertVenueToSeatMap = (venueData: any): SeatMap => {
 };
 
 
-// Convert SeatMap to venue format for saving
-export const convertSeatMapToVenue = (seatMap: SeatMap): any => {
-  // Create floors with sections and seats
-  const floors = seatMap.floors.map(floor => {
-    // Get sections for this floor
-    const floorSections = seatMap.sections.filter(section => section.floorId === floor.id);
-    
-    // Map sections with their seats
-    const sections = floorSections.map(section => {
-      // Get seats for this section
-      const sectionSeats = seatMap.seats.filter(seat => seat.sectionId === section.id);
+// Convert SeatMap to venue format for API
+export const convertSeatMapToVenue = (seatMap: SeatMap) => {
+  console.log('Converting SeatMap to venue format:', seatMap);
+  
+  // Create venue object
+  const venue = {
+    id: `new-${Math.random().toString(36).substring(2, 9)}`,
+    name: seatMap.title,
+    stage: {
+      ...seatMap.stage,
+      background: "#000000",
+      color: "#FFFFFF"
+    },
+    floors: seatMap.floors.map(floor => {
+      console.log(`Processing floor: ${floor.id} - ${floor.name}`);
       
-      // Map seats to API format
-      const seats = sectionSeats.map(seat => {
-        // Generate new ID if it starts with "new-"
-        const id = seat.id.startsWith('new-') ? 
-          `new-${Math.random().toString(36).substring(2, 9)}` : 
-          seat.id;
+      // Get sections for this floor
+      const floorSections = seatMap.sections.filter(section => section.floorId === floor.id);
+      console.log(`Found ${floorSections.length} sections for floor ${floor.id}`);
+      
+      // Create sections with seats
+      const sections = floorSections.map(section => {
+        // Find all seats that belong to this section
+        let sectionSeats = seatMap.seats.filter(seat => seat.sectionId === section.id);
+        
+        // If no seats are found by sectionId, try to find seats by position
+        if (sectionSeats.length === 0) {
+          sectionSeats = seatMap.seats.filter(seat => {
+            // Only consider seats on the same floor
+            if (seat.floorId !== floor.id) return false;
+            
+            // Check if seat is within section boundaries
+            return (
+              seat.x >= section.x && 
+              seat.x <= (section.x + section.width) &&
+              seat.y >= section.y && 
+              seat.y <= (section.y + section.height)
+            );
+          });
+          
+          // Assign sectionId to these seats for future reference
+          sectionSeats.forEach(seat => {
+            seat.sectionId = section.id;
+          });
+        }
+        
+        console.log(`Found ${sectionSeats.length} seats for section ${section.id}`);
+        
+        // Make sure to convert seat coordinates to be relative to the section
+        const processedSeats = sectionSeats.map(seat => ({
+          id: seat.id,
+          row: seat.row,
+          number: seat.number,
+          x: seat.x - section.x, // relative position to section
+          y: seat.y - section.y, // relative position to section
+          type: seat.type,
+          is_active: seat.status !== 'disabled', // convert status to is_active boolean
+          price: seat.price || 0
+        }));
         
         return {
-          id,
-          row: seat.row || '',
-          number: seat.number || '',
-          type: seat.type || 'regular',
-          is_active: seat.status === 'available',
-          price: Number(seat.price) || 0,
-          x: Number(seat.x - section.x) || 0, // Relative to section
-          y: Number(seat.y - section.y) || 0  // Relative to section
+          id: section.id,
+          name: section.name,
+          code: section.code || `SECTION-${section.id.split('-')[1] || '0'}-`,
+          shape: "rectangle",
+          x: section.x,
+          y: section.y,
+          width: section.width,
+          height: section.height,
+          color: "#FFFFFF",
+          background: section.color,
+          seats: processedSeats // Use the processed seats
         };
       });
       
-      // Generate new ID if it starts with "new-"
-      const id = section.id.startsWith('new-') ? 
-        `new-${Math.random().toString(36).substring(2, 9)}` : 
-        section.id;
-      
       return {
-        id,
-        name: section.name || '',
-        code: section.code || `SECTION-${section.id.substring(0, 8)}`,
-        shape: section.shape || 'rectangle',
-        x: Number(section.x) || 0,
-        y: Number(section.y) || 0,
-        width: Number(section.width) || 100,
-        height: Number(section.height) || 100,
-        background: section.color || '#D3E4FD',
-        color: '#FFFFFF',
-        seats
+        id: floor.id,
+        name: floor.name,
+        level: floor.level,
+        sections
       };
+    })
+  };
+  
+  // Add any orphaned seats (not in any section) to the first section of their floor
+  seatMap.floors.forEach(floor => {
+    const orphanedSeats = seatMap.seats.filter(seat => 
+      seat.floorId === floor.id && !seat.sectionId
+    );
+    
+    if (orphanedSeats.length > 0) {
+      console.log(`Found ${orphanedSeats.length} orphaned seats on floor ${floor.id}`);
+      
+      // Find the first section on this floor, or create one if none exists
+      const floorIndex = venue.floors.findIndex(f => f.id === floor.id);
+      if (floorIndex >= 0) {
+        if (venue.floors[floorIndex].sections.length === 0) {
+          // Create a new section for orphaned seats
+          const newSection = {
+            id: `section-orphaned-${floor.id}`,
+            name: "Other Seats",
+            code: "OTHER-",
+            shape: "rectangle",
+            x: Math.min(...orphanedSeats.map(s => s.x)) - 10,
+            y: Math.min(...orphanedSeats.map(s => s.y)) - 10,
+            width: Math.max(...orphanedSeats.map(s => s.x)) - Math.min(...orphanedSeats.map(s => s.x)) + 40,
+            height: Math.max(...orphanedSeats.map(s => s.y)) - Math.min(...orphanedSeats.map(s => s.y)) + 40,
+            color: "#FFFFFF",
+            background: "#E5E7EB",
+            seats: orphanedSeats.map(seat => ({
+              id: seat.id,
+              row: seat.row,
+              number: seat.number,
+              x: seat.x - (Math.min(...orphanedSeats.map(s => s.x)) - 10),
+              y: seat.y - (Math.min(...orphanedSeats.map(s => s.y)) - 10),
+              type: seat.type,
+              is_active: seat.status !== 'disabled',
+              price: seat.price || 0
+            }))
+          };
+          venue.floors[floorIndex].sections.push(newSection);
+        } else {
+          // Add orphaned seats to the first section
+          const sectionIndex = 0;
+          const section = venue.floors[floorIndex].sections[sectionIndex];
+          const sectionX = section.x;
+          const sectionY = section.y;
+          
+          const processedOrphanedSeats = orphanedSeats.map(seat => ({
+            id: seat.id,
+            row: seat.row,
+            number: seat.number,
+            x: seat.x - sectionX,
+            y: seat.y - sectionY,
+            type: seat.type,
+            is_active: seat.status !== 'disabled',
+            price: seat.price || 0
+          }));
+          
+          venue.floors[floorIndex].sections[sectionIndex].seats.push(...processedOrphanedSeats);
+        }
+      }
+    }
+  });
+  
+  console.log('Final venue data to be sent:', venue);
+  return venue;
+};
+// Save venue data to the API
+// Save venue data to the API
+
+export const saveVenue = async (seatMap: SeatMap) => {
+  try {
+    // تبدیل داده‌های نقشه به فرمت مناسب برای ارسال
+    let venueData = convertSeatMapToVenue(seatMap);
+    
+    // ابتدا داده‌های فعلی را از سرور دریافت می‌کنیم (اگر وجود داشته باشد)
+    try {
+      const currentData = await fetchVenue();
+      const currentVenue = currentData.data?.venue;
+      
+      if (currentVenue && currentVenue.id) {
+        console.log('Current venue data from server:', currentVenue);
+        
+        // حفظ ID اصلی
+        venueData.id = currentVenue.id;
+      }
+    } catch (error) {
+      console.warn('Could not fetch current venue data, creating new venue');
+    }
+    
+    console.log('Merged venue data to be saved:', venueData);
+    
+    // ارسال داده‌ها به سرور
+    const response = await fetch(`${API_URL}venue`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${TOKEN}`,
+      },
+      body: JSON.stringify(venueData),
     });
     
-    // Generate new ID if it starts with "new-"
-    const id = floor.id.startsWith('new-') ? 
-      `new-${Math.random().toString(36).substring(2, 9)}` : 
-      floor.id;
+    const result = await handleResponse(response);
+    console.log('Save venue response:', result);
     
-    return {
-      id,
-      name: floor.name || '',
-      level: Number(floor.level) || 1,
-      sections
-    };
-  });
-  
-  // Create the venue object
-  return {
-    id: seatMap.id || `new-${Math.random().toString(36).substring(2, 9)}`,
-    name: seatMap.title || seatMap.venue || 'سالن جدید',
-    stage: {
-      x: Number(seatMap.stage.x) || 1200,
-      y: Number(seatMap.stage.y) || 100,
-      width: Number(seatMap.stage.width) || 600,
-      height: Number(seatMap.stage.height) || 80,
-      name: seatMap.stage.name || 'صحنه اجرا',
-      background: "#000000",
-      color: "#FFFFFF",
-      floorId: seatMap.stage.floorId || floors[0]?.id || 'floor-1'
-    },
-    floors
-  };
-};
-
-// Save venue data to the API
-// Save venue data to the API
-export const saveVenue = async (seatMap: SeatMap) => {
-  const venueData = convertSeatMapToVenue(seatMap);
-  
-  console.log('Saving venue data:', venueData);
-  
-  const response = await fetch(`${API_URL}venue`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${TOKEN}`,
-    },
-    body: JSON.stringify(venueData),
-  });
-  
-  const result = await handleResponse(response);
-  console.log('Save venue response:', result);
-  
-  return result;
+    return result;
+  } catch (error) {
+    console.error('Error in saveVenue:', error);
+    throw error;
+  }
 };
