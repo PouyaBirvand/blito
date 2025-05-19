@@ -9,13 +9,14 @@ import { SeatToolbar } from "@/components/SeatToolbar.tsx";
 import { SeatMapCanvas } from "./components/SeatMapCanvas";
 import { toast } from "sonner";
 import { Progress } from '@/components/ui/progress';
-import { Loader, Save } from 'lucide-react';
+import { Loader, Save, MapPin } from 'lucide-react';
 import * as api from '@/services/api';
 
 function App() {
   const { seatMap, setSeatMap } = useSeatMapStore();
   const [activeTab, setActiveTab] = useState("canvas");
   const [isExporting, setIsExporting] = useState(false);
+  const [isLoadingVenue, setIsLoadingVenue] = useState(false);
 
   // Verify token first
   const tokenVerification = useQuery({
@@ -28,7 +29,7 @@ function App() {
       toast.error("Authentication failed", {
         description: "Unable to verify your access token. Please try again later."
       });
-      
+
       // در صورت خطا، اجازه دهید برنامه با داده‌های پیش‌فرض کار کند
       if (venueQuery.isError || !venueQuery.data) {
         setSeatMap({
@@ -45,7 +46,7 @@ function App() {
           sections: [],
           seats: [],
           floors: [
-            {id: 'floor-1', name: 'طبقه همکف', level: 1}
+            { id: 'floor-1', name: 'طبقه همکف', level: 1 }
           ],
           activeFloorId: 'floor-1'
         });
@@ -54,28 +55,40 @@ function App() {
   });
 
   // Fetch venue data after token verification
-  const venueQuery = useQuery({
-    queryKey: ['venue'],
-    queryFn: api.fetchVenue,
-    // اجازه دهید حتی در صورت خطای احراز هویت، تلاش کند داده‌ها را بگیرد
-    enabled: !tokenVerification.isLoading,
-    retry: 3,
-    retryDelay: 1000,
-    onSuccess: (data) => {
-      // Convert venue data to our SeatMap format
-      const convertedSeatMap = api.convertVenueToSeatMap(data);
-      setSeatMap(convertedSeatMap);
-      toast.success("Venue data loaded", {
-        description: `Successfully loaded "${data.name}" venue data.`
+// Fetch venue data after token verification
+const venueQuery = useQuery({
+  queryKey: ['venue'],
+  queryFn: api.fetchVenue,
+  // اجازه دهید حتی در صورت خطای احراز هویت، تلاش کند داده‌ها را بگیرد
+  enabled: !tokenVerification.isLoading,
+  retry: 3,
+  retryDelay: 1000,
+  onSuccess: (response) => {
+    // Extract the venue data from the response
+    const venueData = response.data?.venue;
+    
+    if (!venueData) {
+      toast.error("Invalid venue data format", {
+        description: "The venue data received from the server is not in the expected format."
       });
-    },
-    onError: (error) => {
-      console.error('Error fetching venue data:', error);
-      toast.error("Failed to load venue data", {
-        description: "There was an error loading the venue data. Please try again later."
-      });
+      return;
     }
-  });
+    
+    // Convert venue data to our SeatMap format
+    const convertedSeatMap = api.convertVenueToSeatMap(venueData);
+    setSeatMap(convertedSeatMap);
+    toast.success("Venue data loaded", {
+      description: `Successfully loaded "${venueData.name}" venue data.`
+    });
+  },
+  onError: (error) => {
+    console.error('Error fetching venue data:', error);
+    toast.error("Failed to load venue data", {
+      description: "There was an error loading the venue data. Please try again later."
+    });
+  }
+});
+
 
   // Save venue mutation
   const saveMutation = useMutation({
@@ -100,7 +113,7 @@ function App() {
 
   useEffect(() => {
     document.title = "طراحی نقشه سالن - بلیتو";
-    
+
     // Center the view on the stage when the component mounts
     const timer = setTimeout(() => {
       const canvasContainer = document.querySelector('.flex-1.relative.overflow-hidden');
@@ -112,7 +125,7 @@ function App() {
         });
       }
     }, 100);
-    
+
     return () => clearTimeout(timer);
   }, []);
 
@@ -141,8 +154,24 @@ function App() {
     }
   };
 
-  const handleSave = () => {
-    saveMutation.mutate(seatMap);
+
+  const handleSave = async () => {
+    try {
+      // ذخیره نقشه در سرور
+      await saveMutation.mutateAsync(seatMap);
+      
+      // بارگذاری مجدد نقشه از سرور برای تأیید ذخیره‌سازی
+      await handleLoadVenueMap();
+      
+      toast.success("ذخیره موفقیت‌آمیز", {
+        description: "نقشه سالن با موفقیت در سرور ذخیره شد و مجدداً بارگذاری شد."
+      });
+    } catch (error) {
+      console.error('Error in save operation:', error);
+      toast.error("خطا در ذخیره‌سازی", {
+        description: "مشکلی در ذخیره‌سازی نقشه سالن رخ داد. لطفاً دوباره تلاش کنید."
+      });
+    }
   };
 
   const handleNewMap = () => {
@@ -161,7 +190,7 @@ function App() {
         sections: [],
         seats: [],
         floors: [
-          {id: 'floor-1', name: 'طبقه همکف', level: 1}
+          { id: 'floor-1', name: 'طبقه همکف', level: 1 }
         ],
         activeFloorId: 'floor-1'
       });
@@ -171,6 +200,58 @@ function App() {
     }
   };
 
+  // New function to load venue map from API
+  // New function to load venue map from API
+  // New function to load venue map from API
+// New function to load venue map from API
+const handleLoadVenueMap = async () => {
+  setIsLoadingVenue(true);
+  try {
+    // دریافت داده‌های سالن مستقیماً از API
+    const response = await api.fetchVenue();
+    
+    console.log('Full API response:', response);
+    
+    if (!response || !response.data || !response.data.venue) {
+      console.error('Invalid response structure:', response);
+      throw new Error('داده‌های سالن از API دریافت نشد');
+    }
+    
+    // استخراج داده‌های واقعی سالن از پاسخ
+    const venueData = response.data.venue;
+    console.log('Extracted venue data:', venueData);
+    
+    // تبدیل داده‌های سالن به فرمت SeatMap
+    const convertedSeatMap = api.convertVenueToSeatMap(venueData);
+    console.log('Converted seat map:', convertedSeatMap);
+    
+    // به‌روزرسانی state با نقشه جدید
+    setSeatMap(convertedSeatMap);
+    
+    toast.success("نقشه سالن بارگذاری شد", {
+      description: `نقشه سالن "${venueData.name}" با موفقیت بارگذاری شد.`
+    });
+    
+    // مرکز قرار دادن نما روی صحنه
+    setTimeout(() => {
+      const canvasContainer = document.querySelector('.flex-1.relative.overflow-hidden');
+      if (canvasContainer) {
+        canvasContainer.scrollTo({
+          left: convertedSeatMap.stage.x - canvasContainer.clientWidth / 2,
+          top: convertedSeatMap.stage.y - canvasContainer.clientHeight / 2,
+          behavior: 'smooth'
+        });
+      }
+    }, 100);
+  } catch (error) {
+    console.error('Error loading venue map:', error);
+    toast.error("خطا در بارگذاری نقشه", {
+      description: "مشکلی در بارگذاری نقشه سالن از سرور رخ داد. لطفاً دوباره تلاش کنید."
+    });
+  } finally {
+    setIsLoadingVenue(false);
+  }
+};
   return (
     <>
       <TooltipProvider>
@@ -186,6 +267,21 @@ function App() {
               </div>
               <div className="flex space-x-2">
                 <Button variant="outline" onClick={handleNewMap}>بازنشانی</Button>
+                {/* New button to load venue map from API */}
+                {/* New button to load venue map from API */}
+                <Button
+                  variant="outline"
+                  onClick={handleLoadVenueMap}
+                  disabled={isLoadingVenue}
+                  className="bg-blue-50 hover:bg-blue-100"
+                >
+                  {isLoadingVenue ? (
+                    <Loader className="h-4 w-4 animate-spin ml-2" />
+                  ) : (
+                    <MapPin className="h-4 w-4 ml-2" />
+                  )}
+                  {venueQuery.data?.data?.venue?.name ? `نمایش نقشه ${venueQuery.data.data.venue.name}` : "نمایش نقشه سالن"}
+                </Button>
                 <Button
                   variant="outline"
                   onClick={handleExport}
@@ -194,8 +290,8 @@ function App() {
                   {isExporting ? <Loader className="h-4 w-4 animate-spin ml-2" /> : null}
                   خروجی
                 </Button>
-                <Button 
-                  variant="default" 
+                <Button
+                  variant="default"
                   onClick={handleSave}
                   disabled={isSaving}
                   className="bg-green-600 hover:bg-green-700"
@@ -247,6 +343,16 @@ function App() {
                 <div className="flex items-center space-x-2">
                   <Loader className="h-4 w-4 animate-spin" />
                   <span>در حال بارگذاری اطلاعات...</span>
+                </div>
+                <Progress value={75} className="mt-2" />
+              </div>
+            )}
+            {/* Venue Loading Indicator */}
+            {isLoadingVenue && (
+              <div className="fixed bottom-4 right-4 bg-white p-4 rounded-lg shadow-lg z-50">
+                <div className="flex items-center space-x-2">
+                  <Loader className="h-4 w-4 animate-spin" />
+                  <span>در حال بارگذاری نقشه سالن میلاد...</span>
                 </div>
                 <Progress value={75} className="mt-2" />
               </div>
